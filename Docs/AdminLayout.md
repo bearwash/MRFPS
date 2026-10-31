@@ -1,6 +1,6 @@
-# 管理者権限と固定サイズ床（protocol 4 の準備パッチ）
+# 管理者権限と固定サイズ床
 
-この文書と実装は隔離フォルダーで準備したものです。稼働中の protocol 3 サーバー・クライアントへはまだ適用していません。Unreal の新規テストは未ビルド・未実行です。既存の実映像・認証・Quest の検証結果を、この機能の検証結果として流用しません。
+以下の床の手順は protocol 19 の実装です。実機での位置合わせ精度は設置位置と向きに依存します。
 
 ## 署名された管理者
 
@@ -8,7 +8,7 @@
 
 管理者は専用の観戦者です。fighter slot は常に -1、射撃・シールド・プレイヤーの動画／実測形状の発行権限はありません。サーバーで検証した signed role だけから `bAdmin` を設定します。`?Admin=1`、UI 操作、ローカル PlayerState の書換えでは player / inspector トークンを昇格できません。すべての管理 RPC は現在の認証状態・期限・role・revision・rate をサーバーで再検査します。
 
-通常の上限は fighter 2、inspector 32、admin 4 です。管理者枠は観戦者枠とは別に数え、GameSession の合計を 38 にします。
+プレイヤーは2人、管理者は1人までです。観戦者はプレイヤー枠・管理者枠とは別に数えます。
 
 ```powershell
 # 発行は既存の信頼された発行者 PC で行う。実際の秘密値をコマンドへ直書きしない。
@@ -17,7 +17,7 @@
   --subject operator-1 --role admin --dtls-fingerprint <current-server-fingerprint> `
   --output <new-operator.jwt>
 
-# 全ターゲットを protocol 4 へそろえてから接続する。
+# 全ターゲットを同じ protocol 19 へそろえてから接続する。
 UnrealEditor.exe MRFPS.uproject /Game/Maps/MRFPSArena -game `
   -MRFPSServer=<server:port> -MRFPSAdmin -MRFPSDesktop -nohmd `
   -MRFPSAuthPublicKeyFile=<issuer-public.pem> -MRFPSAuthTokenFile=<new-operator.jwt>
@@ -29,7 +29,7 @@ F1 の接続メニューに Join admin、接続後 F2 に管理パネルを追�
 
 初期値は **X 幅 450 cm、Y 長さ 700 cm**。INI の `ArenaWidthCm` / `ArenaLengthCm` または管理者の明示的な寸法操作でのみ変えます。範囲は各 200〜2000 cm です。寸法は実測された二人の距離へ合わせません。追跡のスケールも変更しません。
 
-通常の校正は、現在の手動共通原点手順を使います。各ヘッドセットを同じ実床の目印で同じ +X へ向けて校正し、双方が同じ Stage floor を使うことを操作者が確認します。その後、管理者が **CONFIRM BOTH MANUAL ORIGINS / STAGE FLOOR** を押します。これは物理的な原点共有をソフトウェアが自動検証する仕組みではありません。独立したヘッドセットの座標を無条件に共通座標とは扱いません。
+両プレイヤーは実際の開始位置に立ち、互いに向き合ってそれぞれ左 Y を押します。端末ごとに、その位置と向きを固定床の P1/P2 の両端と内向きの方向へ対応させます。両端の実距離は設定した床の長さに合わせ、両端の床の高さもそろえてください。これは手動の位置合わせであり、実際の距離や向きの誤差を自動測定するものではありません。その後、管理者が「原点登録」を押します。
 
 登録条件は、有効な署名 player の 0/1 slot、双方の新鮮で妥当な追跡、校正済み、Stage floor、非 desktop、現在の Pawn identity と校正世代の一致です。Stage 床はその共通基準の Z=0 です。頭の Z の平均から床高を作りません。
 
@@ -55,11 +55,8 @@ PLACE WALLS は自由な 3D 観戦ビューへ切り替えてカーソルを解�
 
 `FMRFPSGeometryChunk` に `LayoutRevision`、stop RPC に同 revision を追加します。各 fragment は allocation 前に count/length を検査し、追加後も 1024-byte native DTLS に収まる 600 byte 未満です。wire の座標 envelope と、現在の回転した固定床への包含判定を分けます。source / server / renderer commit が現在の layout revision と bounds を照合します。layout 更新は geometry assembler・queue・PS stream・CPU collision・mesh を無効化し、旧 layout の frame / stop で新世界の物体を閉じたり表示したりできないようにします。
 
-新 RPC と replicated fields があるので **network protocol 4** が必要です。Editor / Windows / Linux / Quest を同じ版へ更新し、稼働サーバーの新しいDTLS fingerprintに署名された各roleのトークンを発行します。映像の30fps目標、rate admission、受信公平性、captureの停止・復帰、ネットワーク速度の変更と統合済みです。30fpsの実機達成を示すものではありません。
+**network protocol 19** が必要です。Editor / Windows / Linux / Quest を同じ版へ更新し、稼働サーバーの新しいDTLS fingerprintに署名された各roleのトークンを発行します。映像の30fps目標、rate admission、受信公平性、captureの停止・復帰、ネットワーク速度の変更と統合済みです。30fpsの実機達成を示すものではありません。
 
-## 検証状況
+## 実機での制約
 
-- 隔離した Python issuer / verifier: **12 tests PASS**。admin の正常署名、role mismatch、unsigned role tamper、既存の strict JWT / expiry / file privacy を含みます。
-- 新 Unreal tests: `MRFPS.Admin.FixedLayout`、`MRFPS.Admin.AuthorityAndFixedCalibration`、`MRFPS.Admin.CombatPauseLifetime` は実EditorでPASS。MRFPS全30件の結果は `Saved/Validation/AdminVideoRecovery-20261028-1518/Automation-20261028-152514/report.json`。
-- 既存 Core pose/combat と Geometry wire/collision/expiry fixtures を固定長方形へ更新。layout 世代混合と out-of-bounds commit の拒否を追加。
-- 物理的な二台の共通床の登録、管理 UI の実画像、管理者の実 DTLS admission、Pause/Resume の実ネットワークは検証待ち。全ターゲット build と配布版確認は同runで進行中です。
+対向した2台のQuestによる校正と、今回のサーバー側IK当たり判定は、実機での動作を確認していません。

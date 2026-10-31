@@ -330,6 +330,7 @@ public:
     UPROPERTY(Replicated, BlueprintReadOnly) bool bShieldActive = false;
     UPROPERTY(Replicated) bool bGrenadeEquipped = false;
     UPROPERTY(Replicated, BlueprintReadOnly) bool bCalibrated = false;
+    UPROPERTY(Replicated, BlueprintReadOnly) bool bServerIKHitboxesReady = false;
     UPROPERTY(Replicated,BlueprintReadOnly) bool bStageFloorReferenced=false;
     UPROPERTY(Replicated) uint32 GeometryCalibrationGeneration = 0;
     UPROPERTY(Replicated, BlueprintReadOnly) double RespawnAt = 0;
@@ -340,6 +341,7 @@ public:
     UPROPERTY(VisibleAnywhere) TObjectPtr<UMotionControllerComponent> RightController;
     UPROPERTY(VisibleAnywhere) TObjectPtr<USphereComponent> HeadHitbox;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UCapsuleComponent> BodyHitbox;
+    UPROPERTY(VisibleAnywhere) TArray<TObjectPtr<UCapsuleComponent>> AvatarHitboxes;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UBoxComponent> MiniShield;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> HeadVisual;
     UPROPERTY(VisibleAnywhere) TObjectPtr<UStaticMeshComponent> BodyVisual;
@@ -402,6 +404,8 @@ private:
     FVector DesktopHead = FVector(0,-350,170);
     FRotator DesktopRotation = FRotator::ZeroRotator;
     float PoseAccumulator = 0;
+    float AuthorityAvatarAccumulator = 0;
+    double NextAvatarInitAttemptAt = 0;
     double LastLocalFire = -100;
     double LastServerFire = -100;
     double LastReloadAt = -100;

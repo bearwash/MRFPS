@@ -360,6 +360,7 @@ void AMRFPSPlayerController::TickAutomation()
                     Data->SetNumberField(TEXT("quest_mobits_code"),State.Code);
                     Data->SetStringField(TEXT("quest_mobits_message"),State.Message);
                     Data->SetBoolField(TEXT("quest_mobits_has_session"),State.bHasSession);
+                    Data->SetBoolField(TEXT("quest_mobits_scanning"),State.bScanning);
                     Data->SetNumberField(TEXT("quest_mobits_stop_unconfirmed"),State.StopUnconfirmedMask);
                     TArray<TSharedPtr<FJsonValue>> Devices;
                     for (const auto& Device:State.Devices) {
@@ -401,7 +402,21 @@ void AMRFPSPlayerController::TickAutomation()
                 Data->SetObjectField(TEXT("round_notice"),RoundNotice);
                 Data->SetBoolField(TEXT("shared_floor_confirmed"),GS->bSharedFloorConfirmed); Data->SetBoolField(TEXT("layout_calibrated"),GS->Layout.bCalibrated);
                 Data->SetNumberField(TEXT("layout_revision"),GS->Layout.Revision); Data->SetNumberField(TEXT("control_revision"),GS->ControlRevision);
-                Data->SetNumberField(TEXT("width_cm"),GS->Layout.WidthCm); Data->SetNumberField(TEXT("length_cm"),GS->Layout.LengthCm); }
+                Data->SetNumberField(TEXT("width_cm"),GS->Layout.WidthCm); Data->SetNumberField(TEXT("length_cm"),GS->Layout.LengthCm);
+                TArray<TSharedPtr<FJsonValue>> Fighters;
+                for (int32 Slot=0;Slot<2;++Slot) if (const auto* Fighter=FindPlayer(Slot)) {
+                    auto Item=MakeShared<FJsonObject>(); Item->SetNumberField(TEXT("slot"),Slot);
+                    Item->SetBoolField(TEXT("calibrated"),Fighter->bCalibrated);
+                    Item->SetBoolField(TEXT("head_tracked"),Fighter->Pose.bHeadTracked);
+                    Item->SetBoolField(TEXT("inside_arena"),Fighter->IsInsideArena());
+                    Item->SetBoolField(TEXT("server_ik_hitboxes_ready"),Fighter->bServerIKHitboxesReady);
+                    Item->SetNumberField(TEXT("head_x_cm"),Fighter->Pose.Head.X);
+                    Item->SetNumberField(TEXT("head_y_cm"),Fighter->Pose.Head.Y);
+                    Item->SetNumberField(TEXT("head_z_cm"),Fighter->Pose.Head.Z);
+                    Fighters.Add(MakeShared<FJsonValueObject>(Item));
+                }
+                Data->SetArrayField(TEXT("fighters"),Fighters);
+            }
         } else if(Operation==TEXT("roster.list")) {
             if (!MRFPSRoster::CanView(this)) { Ok=false; Code=TEXT("INSPECTOR_REQUIRED"); }
             else {
@@ -573,7 +588,7 @@ void AMRFPSPlayerController::TickAutomation()
             else if(!Fighter->bCalibrated) { Ok=false; Code=TEXT("CALIBRATION_REQUIRED"); }
             else if(ReadyState->RoundReadyMask&(1u<<Fighter->GetSlot())) { Already=true; Code=TEXT("ROUND_READY_ALREADY_SET"); }
             else { Fighter->ServerRoundReady(ReadyState->RoundReadyWindow); Submitted=true; Code=TEXT("ROUND_READY_SUBMITTED"); }
-        } else if(Operation==TEXT("mobits.start") || Operation==TEXT("mobits.scan") || Operation==TEXT("mobits.pair") || Operation==TEXT("mobits.identify")) {
+        } else if(Operation==TEXT("mobits.start") || Operation==TEXT("mobits.scan") || Operation==TEXT("mobits.scan.stop") || Operation==TEXT("mobits.pair") || Operation==TEXT("mobits.identify")) {
 #if PLATFORM_ANDROID
             auto* Fighter=GetPawn<AMRFPSPawn>();
             auto* Runtime=Fighter?Fighter->QuestHaptics.Get():nullptr;
@@ -591,8 +606,13 @@ void AMRFPSPlayerController::TickAutomation()
                     else { Ok=false; Code=TEXT("MOBITS_START_FAILED"); }
                 } else if(State.bHasSession) { Ok=false; Code=TEXT("MOBITS_SESSION_OPEN"); }
                 else if(Operation==TEXT("mobits.scan")) {
-                    if(Runtime->ScanDevices()) { Submitted=true; Code=TEXT("MOBITS_SCAN_SUBMITTED"); }
+                    if(State.bScanning) { Already=true; Code=TEXT("MOBITS_SCANNING"); }
+                    else if(Runtime->ScanDevices()) { Submitted=true; Code=TEXT("MOBITS_SCAN_SUBMITTED"); }
                     else { Ok=false; Code=TEXT("MOBITS_SCAN_FAILED"); }
+                } else if(Operation==TEXT("mobits.scan.stop")) {
+                    if(!State.bScanning) { Already=true; Code=TEXT("MOBITS_SCAN_STOPPED"); }
+                    else if(Runtime->StopScan()) { Submitted=true; Code=TEXT("MOBITS_SCAN_STOP_SUBMITTED"); }
+                    else { Ok=false; Code=TEXT("MOBITS_SCAN_STOP_FAILED"); }
                 } else {
                     FString Id; const FMoBitsQuestDevice* Selected=nullptr;
                     if(Params->TryGetStringField(TEXT("id"),Id) && !Id.IsEmpty() && Id.Len()<=128)

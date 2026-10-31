@@ -104,6 +104,20 @@ constexpr double DamageNumberLifetime=.85;
         C->SetCollisionResponseToChannel(WeaponChannel, ECR_Block);
         C->SetGenerateOverlapEvents(false);
     }
+    struct FAvatarHitSegment { const TCHAR* Component; const TCHAR* From; const TCHAR* To; float Radius; };
+    static const FAvatarHitSegment AvatarHitSegments[] = {
+        {TEXT("HitTorso"),TEXT("pelvis"),TEXT("spine_03"),20},
+        {TEXT("HitChest"),TEXT("spine_03"),TEXT("neck_01"),18},
+        {TEXT("HitShoulders"),TEXT("upperarm_l"),TEXT("upperarm_r"),11},
+        {TEXT("HitUpperArmL"),TEXT("upperarm_l"),TEXT("lowerarm_l"),8},
+        {TEXT("HitForearmL"),TEXT("lowerarm_l"),TEXT("hand_l"),7},
+        {TEXT("HitUpperArmR"),TEXT("upperarm_r"),TEXT("lowerarm_r"),8},
+        {TEXT("HitForearmR"),TEXT("lowerarm_r"),TEXT("hand_r"),7},
+        {TEXT("HitThighL"),TEXT("thigh_l"),TEXT("calf_l"),11},
+        {TEXT("HitCalfL"),TEXT("calf_l"),TEXT("foot_l"),9},
+        {TEXT("HitThighR"),TEXT("thigh_r"),TEXT("calf_r"),11},
+        {TEXT("HitCalfR"),TEXT("calf_r"),TEXT("foot_r"),9},
+    };
     static void Material(UStaticMeshComponent* C, const TCHAR* Name)
     {
         if (C->GetStaticMesh() && C->GetStaticMesh()->GetName().StartsWith(TEXT("SM_MR"))) return;
@@ -341,6 +355,11 @@ AMRFPSPawn::AMRFPSPawn()
     HeadHitbox->InitSphereRadius(13); MRFPS::QueryOnly(HeadHitbox);
     BodyHitbox = CreateDefaultSubobject<UCapsuleComponent>(TEXT("BodyHitbox")); BodyHitbox->SetupAttachment(RootComponent);
     BodyHitbox->InitCapsuleSize(22,50); MRFPS::QueryOnly(BodyHitbox);
+    for (const auto& Segment:MRFPS::AvatarHitSegments) {
+        auto* Hitbox=CreateDefaultSubobject<UCapsuleComponent>(FName(Segment.Component));
+        Hitbox->SetupAttachment(RootComponent); Hitbox->InitCapsuleSize(Segment.Radius,Segment.Radius);
+        Hitbox->SetHiddenInGame(true); MRFPS::QueryOnly(Hitbox); AvatarHitboxes.Add(Hitbox);
+    }
     MiniShield = CreateDefaultSubobject<UBoxComponent>(TEXT("MiniShield")); MiniShield->SetupAttachment(RootComponent);
     MiniShield->InitBoxExtent(FVector(2,22,22)); MRFPS::QueryOnly(MiniShield);
     HeadVisual = MRFPS::Mesh(this, RootComponent, TEXT("Head"), TEXT("/Engine/BasicShapes/Sphere.Sphere"), FVector(.26),TEXT("SM_MRHead"));
@@ -488,7 +507,7 @@ void AMRFPSPawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifeti
     DOREPLIFETIME(AMRFPSPawn,MagazineRounds);
     DOREPLIFETIME(AMRFPSPawn,bGrenadeEquipped);
     DOREPLIFETIME(AMRFPSPawn,GrenadeReadyAt);
-    DOREPLIFETIME(AMRFPSPawn, bCalibrated); DOREPLIFETIME(AMRFPSPawn, RespawnAt); DOREPLIFETIME(AMRFPSPawn, WallReadyAt);
+    DOREPLIFETIME(AMRFPSPawn, bCalibrated); DOREPLIFETIME(AMRFPSPawn,bServerIKHitboxesReady); DOREPLIFETIME(AMRFPSPawn, RespawnAt); DOREPLIFETIME(AMRFPSPawn, WallReadyAt);
     DOREPLIFETIME(AMRFPSPawn,bStageFloorReferenced);
     DOREPLIFETIME(AMRFPSPawn, GeometryCalibrationGeneration);
 }
@@ -520,9 +539,16 @@ void AMRFPSPawn::Calibrate()
         }
         FRotator R; FVector P; UHeadMountedDisplayFunctionLibrary::GetOrientationAndPosition(R,P);
         if (!UHeadMountedDisplayFunctionLibrary::HasValidTrackingPosition()) return;
-        // Stand at the physical arena centre, facing its agreed +X direction.
-        const FQuat Q(FRotator(0,-R.Yaw,0));
-        XROrigin->SetRelativeTransform(FTransform(Q, Q.RotateVector(FVector(-P.X,-P.Y,0))));
+        // Each player stands at their assigned end and faces the other player.
+        // Independent Quest tracking spaces have no common origin, so register
+        // those two physical reference poses to the fixed arena endpoints.
+        const auto& Arena=MRFPS::Layout(World);
+        const int32 Slot=GetSlot();
+        if (!Arena.IsSane() || Slot<0 || Slot>1 || P.ContainsNaN() || R.ContainsNaN()) return;
+        const FQuat Q(FRotator(0,FRotator::NormalizeAxis(Arena.StartRotation(Slot).Yaw-R.Yaw),0));
+        const FVector Start=Arena.NominalStart(Slot,0);
+        const FVector Translation=FVector(Start.X,Start.Y,Arena.Center.Z)-Q.RotateVector(FVector(P.X,P.Y,0));
+        XROrigin->SetWorldTransform(FTransform(Q,Translation));
     }
     if (!MRFPSGeometryWire::AdvanceCalibrationFence(GeometryCalibrationFence,GeometryCalibrationGeneration)) {
         bLocalReady=false; GeometryCalibratedEpoch=0; ServerCalibrate(false); return;
@@ -815,7 +841,13 @@ void AMRFPSPawn::ServerFire_Implementation()
         }
     }
     ClientFeedback(0,0); MulticastShot(Start,bGeometryHit ? GeometryHit : bHit ? Hit.ImpactPoint : End,bHit || bGeometryHit);
-    UE_LOG(LogMRFPS,Display,TEXT("MRFPS_SHOT slot=%d count=%d"),GetSlot(),AcceptedShots);
+    const auto* HitPawn=Cast<AMRFPSPawn>(Hit.GetActor());
+    const auto* State=GetWorld()->GetGameState<AMRFPSGameState>();
+    const TCHAR* HitKind=bGeometryHit?TEXT("measured_geometry"):HitPawn?
+        (Hit.GetComponent()==HitPawn->MiniShield?TEXT("shield"):TEXT("fighter")):
+        bHit?TEXT("world"):TEXT("miss");
+    UE_LOG(LogMRFPS,Display,TEXT("MRFPS_SHOT slot=%d count=%d hit=%s target=%d phase=%d target_can_act=%d"),
+        GetSlot(),AcceptedShots,HitKind,HitPawn?HitPawn->GetSlot():-1,State?int32(State->Phase):-1,HitPawn && HitPawn->CanAct());
 }
 void AMRFPSPawn::ApplyShot(float Damage, AMRFPSPawn* Shooter, bool bHeadshot,const FVector& HitLocation)
 {
@@ -1844,7 +1876,7 @@ void AMRFPSGameMode::Tick(float Dt)
 
 void UMRFPSGameInstance::Init()
 {
-    FNetworkVersion::SetGameNetworkProtocolVersion(18);
+    FNetworkVersion::SetGameNetworkProtocolVersion(19);
     Super::Init();
 #if !UE_SERVER && (PLATFORM_WINDOWS || PLATFORM_MAC || PLATFORM_LINUX)
     // This CVar is marked Cheat in UE 5.8, so setting it in Engine.ini causes
@@ -2104,13 +2136,43 @@ void AMRFPSPawn::UpdateVisuals()
             } else C->SetMaterial(0,Team);
         }
     }
-    HeadHitbox->SetWorldLocation(Pose.Head);
-    BodyHitbox->SetWorldLocation(FVector(Pose.Head)+FVector(0,0,-58));
-    MiniShield->SetWorldLocationAndRotation(FVector(Pose.Left)+Pose.LeftRotation.Vector()*13,Pose.LeftRotation);
     const bool Alive=Health>0;
     const bool Targetable=Alive && IsInsideArena() && (!HasAuthority() || IsPoseFresh());
+    FVector SolvedHead;
+    const bool HaveSolvedHead=HasAuthority() && Avatar && Avatar->TryGetSolvedWorldPosition(TEXT("head"),SolvedHead);
+    HeadHitbox->SetWorldLocation(HaveSolvedHead?SolvedHead:FVector(Pose.Head));
+    BodyHitbox->SetWorldLocation(FVector(Pose.Head)+FVector(0,0,-58));
+    MiniShield->SetWorldLocationAndRotation(FVector(Pose.Left)+Pose.LeftRotation.Vector()*13,Pose.LeftRotation);
+    bool SolvedTorso=false; int32 SolvedSegments=0;
+    for (int32 I=0;I<AvatarHitboxes.Num() && I<UE_ARRAY_COUNT(MRFPS::AvatarHitSegments);++I) {
+        auto* Hitbox=AvatarHitboxes[I].Get(); if (!Hitbox) continue;
+        const auto& Segment=MRFPS::AvatarHitSegments[I];
+        FVector A,B;
+        const bool Solved=HasAuthority() && Avatar &&
+            Avatar->TryGetSolvedWorldPosition(FName(Segment.From),A) &&
+            Avatar->TryGetSolvedWorldPosition(FName(Segment.To),B) &&
+            FVector::DistSquared(A,B)<=FMath::Square(150.);
+        if (Solved) {
+            ++SolvedSegments;
+            const FVector Delta=B-A;
+            const float Radius=Segment.Radius*FMath::Clamp(Avatar->GetBodyScale(),.75f,1.25f);
+            const FQuat Rotation=Delta.IsNearlyZero()?FQuat::Identity:FRotationMatrix::MakeFromZ(Delta).ToQuat();
+            const float HalfHeight=Radius+float(Delta.Size())*.5f;
+            if (!FMath::IsNearlyEqual(Hitbox->GetUnscaledCapsuleRadius(),Radius,.1f) ||
+                !FMath::IsNearlyEqual(Hitbox->GetUnscaledCapsuleHalfHeight(),HalfHeight,.1f))
+                Hitbox->SetCapsuleSize(Radius,HalfHeight,false);
+            Hitbox->SetWorldLocationAndRotation((A+B)*.5,Rotation,false,nullptr,ETeleportType::TeleportPhysics);
+            if (I==0) SolvedTorso=true;
+        }
+        Hitbox->SetCollisionEnabled(Targetable && Solved ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+    }
+    const bool IKReady=HaveSolvedHead && SolvedSegments==UE_ARRAY_COUNT(MRFPS::AvatarHitSegments);
+    if (HasAuthority() && bServerIKHitboxesReady!=IKReady) {
+        bServerIKHitboxesReady=IKReady; ForceNetUpdate();
+        UE_LOG(LogMRFPS,Display,TEXT("MRFPS_IK_HITBOXES slot=%d ready=%d segments=%d"),GetSlot(),IKReady,SolvedSegments);
+    }
     HeadHitbox->SetCollisionEnabled(Targetable ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
-    BodyHitbox->SetCollisionEnabled(Targetable ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
+    BodyHitbox->SetCollisionEnabled(Targetable && !SolvedTorso ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
     MiniShield->SetCollisionEnabled(Targetable && bShieldActive ? ECollisionEnabled::QueryOnly : ECollisionEnabled::NoCollision);
     const bool ShowAvatar=MRFPS::ViewerShowsAvatar(this);
     FMRFPSPose RetainedPose;
@@ -2180,10 +2242,21 @@ void AMRFPSPawn::Tick(float Dt)
         if (Health<=0 && Now>=RespawnAt) if (auto* GS=GetWorld()->GetGameState<AMRFPSGameState>(); GS && GS->Phase==EMRFPSMatchPhase::Playing) Respawn();
     }
     const bool ShowAvatar=MRFPS::ViewerShowsAvatar(this);
-    if (ShowAvatar && Avatar && !Avatar->IsAvatarReady()) Avatar->InitializeAvatar();
+    const bool NeedAvatar=HasAuthority() || ShowAvatar;
+    const double Now=GetWorld()->GetTimeSeconds();
+    if (NeedAvatar && Avatar && !Avatar->IsAvatarReady() && Now>=NextAvatarInitAttemptAt) {
+        NextAvatarInitAttemptAt=Now+5.; Avatar->InitializeAvatar();
+    }
     if(Avatar) {
-        if (ShowAvatar && Health>0 && Avatar->IsAvatarReady()) Avatar->UpdateTracking(Pose,MRFPS::Layout(GetWorld()),GeometryCalibrationGeneration,Dt,false);
-        else Avatar->SetVisibility(false);
+        AuthorityAvatarAccumulator+=Dt;
+        const bool Due=!HasAuthority() || AuthorityAvatarAccumulator>=1.f/30.f;
+        if (NeedAvatar && Due && Health>0 && Avatar->IsAvatarReady()) {
+            const float SolveDt=HasAuthority()?AuthorityAvatarAccumulator:Dt;
+            AuthorityAvatarAccumulator=0;
+            Avatar->UpdateTracking(Pose,MRFPS::Layout(GetWorld()),GeometryCalibrationGeneration,SolveDt,false);
+        }
+        FMRFPSPose VisiblePose;
+        Avatar->SetVisibility(ShowAvatar && Health>0 && Avatar->GetVisualPose(VisiblePose));
     }
     UpdateVisuals();UpdatePlayerHud();UpdateEnemyHealthBar();UpdateDamageNumbers();UpdateFlashHud();
     if (APlayerController* PC=GetWorld()->GetFirstPlayerController(); PC && PC->PlayerCameraManager) {

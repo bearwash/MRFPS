@@ -12,7 +12,7 @@ struct FMRFPSAvatarRig;
 
 /** Manny locomotion followed by a no-stretch full-body solve. Only the head
  * and tracked hands are measurements; the pelvis and planted feet are inferred.
- * This is a visual rig and never changes tracking space or server hitboxes. */
+ * The dedicated server also solves it to position authoritative hitboxes. */
 UCLASS()
 class MRFPS_API UMRFPSAvatarComponent : public UPoseableMeshComponent
 {
@@ -26,7 +26,7 @@ public:
     bool IsAvatarReady() const;
     // Viewer-only last display pose; never use it for server-side gameplay.
     bool GetVisualPose(FMRFPSPose& OutPose) const;
-    FVector SolvedWorldPosition(FName Bone) const;
+    bool TryGetSolvedWorldPosition(FName Bone,FVector& OutPosition) const;
     float GetTrackingErrorCm() const { return TrackingErrorCm; }
     float GetLocomotionSpeed() const { return LocomotionSpeed; }
     float GetBodyScale() const { return BodyScale; }

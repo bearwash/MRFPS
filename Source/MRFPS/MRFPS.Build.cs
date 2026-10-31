@@ -13,7 +13,7 @@ public class MRFPS : ModuleRules
             "HeadMountedDisplay", "XRBase", "UMG", "Slate", "SlateCore",
             "MRFPSHaptics", "MoBitsSDK", "MRFPSAuth", "MRFPSTransport", "PacketHandler", "OnlineSubsystemUtils"
         });
-        PrivateDependencyModuleNames.AddRange(new[] { "HTTP", "Json", "AIModule", "NavigationSystem", "GameplayTasks", "Sockets", "SSL" });
+        PrivateDependencyModuleNames.AddRange(new[] { "HTTP", "Json", "AIModule", "NavigationSystem", "GameplayTasks", "Sockets", "SSL", "PBIK" });
         if (Target.Platform == UnrealTargetPlatform.Android) {
             PrivateIncludePaths.Add(Path.GetFullPath(Path.Combine(ModuleDirectory, "..", "..", ".local", "mobits-connect-headers", "include")));
             PublicSystemLibraries.Add("dl");
@@ -23,7 +23,6 @@ public class MRFPS : ModuleRules
             PrivateDependencyModuleNames.AddRange(new[] { "ImageCore", "ImageWrapper", "RenderCore", "RHI" });
             PrivateDependencyModuleNames.Add("MRFPSXR");
             PrivateDependencyModuleNames.Add("ProceduralMeshComponent");
-            PrivateDependencyModuleNames.Add("PBIK");
             RuntimeDependencies.Add("$(EngineDir)/Content/Slate/Fonts/DroidSansFallback.ttf", StagedFileType.UFS);
         }
     }

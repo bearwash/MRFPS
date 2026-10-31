@@ -224,7 +224,7 @@ void UMRFPSMenu::NativeOnInitialized()
     AlignButton = Button(WidgetTree, TEXT("AlignArena"), TEXT("原点登録"), Secondary);
     AlignButton->OnClicked.AddDynamic(this, &UMRFPSMenu::Align);
     Body->AddChildToVerticalBox(AlignButton);
-    AlignButton->SetToolTipText(FText::FromString(TEXT("共有原点に立ち、決めた正面を向いて登録します")));
+    AlignButton->SetToolTipText(FText::FromString(TEXT("自分の開始位置で相手を向いて登録します")));
     Space(WidgetTree, Body, 12);
     auto* HapticsRow = WidgetTree->ConstructWidget<UHorizontalBox>();
     ConnectButton = Button(WidgetTree, TEXT("ConnectMoBits"), TEXT("MoBits接続"), Secondary, 12);

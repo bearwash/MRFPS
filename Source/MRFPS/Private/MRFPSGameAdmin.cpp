@@ -231,9 +231,9 @@ bool AMRFPSGameMode::CaptureSharedFloorRegistration(FString& SafeError)
     if (!GS || GS->SharedFloorRevision==MAX_uint32) return false;
     AMRFPSPawn* Fighters[2]={FighterAt(GetWorld(),0),FighterAt(GetWorld(),1)};
     for (auto* Fighter:Fighters) if (!LivePlayer(Fighter) || Fighter->Pose.bDesktop || !Fighter->bStageFloorReferenced || !Fighter->GeometryCalibrationGeneration) return false;
-    // This is the operator's explicit confirmation of the existing manual
-    // common-origin/+X procedure and Stage floor, not automatic spatial-anchor
-    // registration. Stage floor is z=0 in that common basis; no head-Z average.
+    // The operator confirms the two endpoint-facing Y calibrations and Stage
+    // floor. They map both tracking spaces to the configured fixed endpoints;
+    // no shared spatial anchor or physical separation was measured.
     for (int32 Slot=0;Slot<2;++Slot) { RegisteredPlayers[Slot]=Fighters[Slot]; RegisteredCalibration[Slot]=Fighters[Slot]->GeometryCalibrationGeneration; }
     ++GS->SharedFloorRevision; GS->bSharedFloorConfirmed=true;
     SafeError.Empty(); return true;

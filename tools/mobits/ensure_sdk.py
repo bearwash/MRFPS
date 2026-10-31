@@ -19,11 +19,13 @@ import tarfile
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-REVISION = "42149ded25702fe329967727328e58498c2a501a"
+REVISION = "aacfa4455df3774d1e4f2047720d55b146999dfd"
 ORIGIN = "https://github.com/MoBits-Project/UE5_SDK.git"
-AAR_SHA256 = "2a08e210d109cc5b2b393b0435d7f6f3486187962cb2ba17932a19c1e045d048"
-PREVIOUS_REVISION = "2aba57a51923fb2252347407f023db8457e05804"
-PREVIOUS_AAR_SHA256 = "b877e2ecbea3538e6065ec2d5056186191ab994b273bd0ae3ab98c42c6439713"
+AAR_SHA256 = "078eaa716251bdde3ec85d134502fc3177c4e0e25a7b793b74aab8ffd008f281"
+PREVIOUS_REVISIONS = {
+    "42149ded25702fe329967727328e58498c2a501a": "2a08e210d109cc5b2b393b0435d7f6f3486187962cb2ba17932a19c1e045d048",
+    "2aba57a51923fb2252347407f023db8457e05804": "b877e2ecbea3538e6065ec2d5056186191ab994b273bd0ae3ab98c42c6439713",
+}
 PREFIX = PurePosixPath("Plugins/MoBitsSDK")
 CONNECT_ORIGIN = "https://github.com/MoBits-Project/MoBitsConnect.git"
 CONNECT_REVISION = "5c9819914c0e99e310e709ae00ccfd648084da8a"
@@ -182,8 +184,10 @@ def installed(target: Path) -> bool:
         raise RuntimeError("Existing MoBits SDK directory is not managed by MRFPS; it was not modified")
     data = json.loads(marker.read_text(encoding="utf-8"))
     aar = target / "Source/Standalone/Libs/mobits-quest-standalone.aar"
-    if data.get("revision") == PREVIOUS_REVISION and data.get("aar_sha256") == PREVIOUS_AAR_SHA256:
-        if not aar.is_file() or sha256(aar) != PREVIOUS_AAR_SHA256:
+    old_revision = data.get("revision")
+    old_aar_sha256 = PREVIOUS_REVISIONS.get(old_revision)
+    if old_aar_sha256 and data.get("aar_sha256") == old_aar_sha256:
+        if not aar.is_file() or sha256(aar) != old_aar_sha256:
             raise RuntimeError("Previous managed MoBits SDK library has changed; it was not modified")
         # Preserve the complete former installation outside Unreal's plugin
         # search directory; do not overwrite user changes or an older archive.
@@ -191,7 +195,7 @@ def installed(target: Path) -> bool:
         if not archive_root.is_relative_to(ROOT.resolve()) or not target.resolve().is_relative_to(ROOT.resolve()):
             raise RuntimeError("MoBits archive and source must remain inside this workspace")
         archive_root.mkdir(parents=True, exist_ok=True)
-        archive = archive_root / ("MoBitsSDK-" + PREVIOUS_REVISION[:12])
+        archive = archive_root / ("MoBitsSDK-" + old_revision[:12])
         if archive.exists() or archive.is_symlink():
             raise RuntimeError("Previous MoBits SDK archive already exists; it was not overwritten")
         os.replace(target, archive)

@@ -25,7 +25,7 @@ FILES = (
     "BondRemoval.java", "GattConnectionSetup.java", "GattOperation.java",
     "MoBitsAndroid.kt", "MoBitsHapticProfile.java", "ScanSession.java",
 )
-QUEST_JAVA_SHA256 = "120b46332f8e7495c36f9c7c16c02c44fa4f8189920caef6cd305dd529c94fc6"
+QUEST_JAVA_SHA256 = "06219425b4358b23f13492c7e19bc2edb9cce1709fd2e23c57684497cbe92985"
 
 
 def replace_once(text: str, old: str, new: str) -> str:

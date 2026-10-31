@@ -1,6 +1,6 @@
 # Quest の MoBits
 
-Quest 版は [MoBits UE5 SDK](https://github.com/MoBits-Project/UE5_SDK) の Quest スタンドアローン版 `42149ded25702fe329967727328e58498c2a501a` を使用します。MoBits の別アプリ、PC、ADB 中継を使わずに、Quest 本体の Bluetooth で左右の EVT5 に接続します。
+Quest 版は [MoBits UE5 SDK](https://github.com/MoBits-Project/UE5_SDK) の Quest スタンドアローン版 `aacfa4455df3774d1e4f2047720d55b146999dfd` を使用します。MoBits の別アプリ、PC、ADB 中継を使わずに、Quest 本体の Bluetooth で左右の EVT5 に接続します。
 
 同じ機器を別の MoBits アプリでも使用している場合は、そちらのセッションを安全に停止してからゲームに接続します。機器の登録情報はゲームごとに保存されるため、初回登録はゲーム内で行います。
 
@@ -29,7 +29,7 @@ $operationId = [guid]::NewGuid().ToString()
 
 接続中にサービス探索の応答がなくなった場合は、その機器の接続を閉じ、該当機器だけの GATT キャッシュを更新して一度だけ再接続します。サービス一覧と必要な MTU が取得できなければ失敗のままにし、ペアリング承認や電気刺激を自動実行しません。
 
-接続の操作は同じローカル操作窓口の `mobits.start`、`mobits.scan`、`mobits.pair`（`{"id":"候補のID"}`）でも要求できます。設定画面を開いた状態では `mobits.identify` で識別振動をやり直せます。各操作は同じ操作 ID を再利用すると重複実行されず、結果が「submitted」のときは `status` で完了を確認します。振動の送信成功は本人が実際に振動を感じたことを保証するものではありません。Bluetooth の権限・ペアリングの承認と、電極の装着・校正・刺激の有効化は本人が行います。
+接続の操作は同じローカル操作窓口の `mobits.start`、`mobits.scan`、`mobits.scan.stop`、`mobits.pair`（`{"id":"候補のID"}`）でも要求できます。検索中かどうかは `status` の `quest_mobits_scanning` で確認できます。設定画面を開いた状態では `mobits.identify` で識別振動をやり直せます。各操作は同じ操作 ID を再利用すると重複実行されず、結果が「submitted」のときは `status` で完了を確認します。振動の送信成功は本人が実際に振動を感じたことを保証するものではありません。Bluetooth の権限・ペアリングの承認と、電極の装着・校正・刺激の有効化は本人が行います。
 
 ## ゲーム内の準備
 
@@ -53,4 +53,4 @@ SDK の物理出力間隔・使用量の制限により、短い間隔の連射�
 
 SDK は非公開リポジトリから `.local/mobits-sdk` に取得し、ゲーム内に組み込みます。Windows の `Scripts/Build-MRFPS.ps1` と Mac の `Scripts/mac/build.sh` は、初回ビルド時に `tools/mobits/ensure_sdk.py` を実行します。Quest ビルドでは識別振動用のヘッダーを取得し、接続復旧の Android ブリッジを固定コミットのソースからローカルで構築します。Gradle 8.14.3 が必要で、コマンドの場所を `MRFPS_MOBITS_GRADLE` に指定できます。両方のリポジトリを読み取れる Git 認証が必要です。元の Android ライブラリの SHA-256 を検証し、ネイティブライブラリを変更せず、非公開の SDK 本体をこのリポジトリへ複製しません。
 
-SDK 0.7.0 はプレビュー版で、上腕2台と固定4波形を対象とします。身体トラッキング、他部位、壁生成、OTA はこのスタンドアローン経路では提供されません。Quest 実機では１台の接続を確認しています。２台同時の接続と身体への出力は未確認です。
+SDK 0.7.1 はプレビュー版で、上腕2台と固定4波形を対象とします。検索の自動終了と保存済み機器の再接続を含みます。身体トラッキング、他部位、壁生成、OTA はこのスタンドアローン経路では提供されません。旧 SDK の Quest 実機では１台の接続を確認しています。新 SDK での接続、２台同時の接続と身体への出力は未確認です。

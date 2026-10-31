@@ -7,6 +7,8 @@ namespace MRFPSArenaLimits
     constexpr double MaxCoordinateCm=16000;
     constexpr double MinDimensionCm=200;
     constexpr double MaxDimensionCm=2000;
+    // Head movement around a start marker at the edge must not disable combat.
+    constexpr double PlayerHeadEdgeToleranceCm=25;
 }
 
 /** Fixed configured rectangle in the existing shared world basis. No tracking scale. */

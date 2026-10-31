@@ -3,19 +3,16 @@
 #include "MRFPSGeometryWorld.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
-#if !UE_SERVER
 #include "Animation/AnimSequence.h"
 #include "Animation/BlendSpace.h"
 #include "Animation/Skeleton.h"
 #include "Core/PBIKSolver.h"
 #include "Core/PBIKBody.h"
-#endif
 
 DEFINE_LOG_CATEGORY_STATIC(LogMRFPSAvatar,Log,All);
 
 struct FMRFPSAvatarRig
 {
-#if !UE_SERVER
     FPBIKSolver Solver;
     TArray<FTransform> Reference;
     TArray<FTransform> Global;
@@ -58,7 +55,6 @@ struct FMRFPSAvatarRig
     bool HeightCalibrated=false;
     bool SeenSequence=false;
     bool WasLocal=false;
-#endif
 };
 
 UMRFPSAvatarComponent::UMRFPSAvatarComponent()
@@ -77,21 +73,19 @@ void UMRFPSAvatarComponent::BeginPlay() { Super::BeginPlay(); }
 bool UMRFPSAvatarComponent::IsAvatarReady() const { return Rig.IsValid(); }
 bool UMRFPSAvatarComponent::GetVisualPose(FMRFPSPose& OutPose) const
 {
-#if !UE_SERVER
     if (Rig && Rig->HasVisualPose) { OutPose=Rig->LastVisualPose; return true; }
-#endif
     return false;
 }
 
 bool UMRFPSAvatarComponent::InitializeAvatar()
 {
-#if !UE_SERVER
     if(Rig) return true;
-    if(GetWorld() && GetWorld()->GetNetMode()==NM_DedicatedServer) return false;
     auto* Mesh=LoadObject<USkeletalMesh>(nullptr,TEXT("/Game/Characters/Mannequins/Meshes/SKM_Manny_Simple.SKM_Manny_Simple"));
     Locomotion=LoadObject<UBlendSpace>(nullptr,TEXT("/Game/Characters/Mannequins/Anims/Unarmed/BS_Idle_Walk_Run.BS_Idle_Walk_Run"));
     Idle=LoadObject<UAnimSequence>(nullptr,TEXT("/Game/Characters/Mannequins/Anims/Unarmed/MM_Idle.MM_Idle"));
-    if(!Mesh || !Locomotion || !Idle) { UE_LOG(LogMRFPSAvatar,Error,TEXT("MRFPS_AVATAR_ASSETS_MISSING"));return false; }
+    if(!Mesh || !Locomotion || !Idle || !Idle->GetSkeleton() || Mesh->GetRefSkeleton().GetNum()==0) {
+        UE_LOG(LogMRFPSAvatar,Error,TEXT("MRFPS_AVATAR_ASSETS_MISSING"));return false;
+    }
     SetSkinnedAssetAndUpdate(Mesh);
     const auto& Ref=Mesh->GetRefSkeleton();
     auto Candidate=MakeShared<FMRFPSAvatarRig>();
@@ -165,14 +159,10 @@ bool UMRFPSAvatarComponent::InitializeAvatar()
     Rig=MoveTemp(Candidate);
     UE_LOG(LogMRFPSAvatar,Display,TEXT("MRFPS_AVATAR_READY model=MannySimple bones=%d locomotion=UE5BlendSpace solver=PBIK tracked=head,hands inferred=pelvis,feet"),Ref.GetNum());
     return true;
-#else
-    return false;
-#endif
 }
 
 void UMRFPSAvatarComponent::UpdateTracking(const FMRFPSPose& InputPose,const FMRFPSArenaLayout& Layout,uint32 Calibration,float Dt,bool LocalView)
 {
-#if !UE_SERVER
     if(!Rig || !InputPose.IsSane() || !Layout.IsSane() || !FMath::IsFinite(Dt) || Dt<=0) return;
     auto& R=*Rig;
     const double Now=GetWorld()?GetWorld()->GetTimeSeconds():0;
@@ -362,16 +352,16 @@ void UMRFPSAvatarComponent::UpdateTracking(const FMRFPSPose& InputPose,const FMR
     }
     R.LastVisualPose=Pose; R.HasVisualPose=true;
     MarkRefreshTransformDirty();RefreshBoneTransforms();
-#endif
 }
 
-FVector UMRFPSAvatarComponent::SolvedWorldPosition(FName Bone) const
+bool UMRFPSAvatarComponent::TryGetSolvedWorldPosition(FName Bone,FVector& OutPosition) const
 {
-#if !UE_SERVER
-    if(Rig) if(const auto* Mesh=Cast<USkeletalMesh>(GetSkinnedAsset())) {
+    if(Rig && Rig->HasVisualPose) if(const auto* Mesh=Cast<USkeletalMesh>(GetSkinnedAsset())) {
         const int32 Index=Mesh->GetRefSkeleton().FindBoneIndex(Bone);
-        if(Rig->Global.IsValidIndex(Index)) return GetComponentTransform().TransformPosition(Rig->Global[Index].GetLocation());
+        if(Rig->Global.IsValidIndex(Index)) {
+            OutPosition=GetComponentTransform().TransformPosition(Rig->Global[Index].GetLocation());
+            return !OutPosition.ContainsNaN();
+        }
     }
-#endif
-    return FVector::ZeroVector;
+    return false;
 }

@@ -40,6 +40,7 @@ private:
 
     UFUNCTION() void Start();
     UFUNCTION() void Scan();
+    UFUNCTION() void StopScan();
     UFUNCTION() void PreviousDevice();
     UFUNCTION() void NextDevice();
     UFUNCTION() void Pair();

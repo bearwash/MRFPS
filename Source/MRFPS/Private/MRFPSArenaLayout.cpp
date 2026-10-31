@@ -20,7 +20,13 @@ bool FMRFPSArenaLayout::ContainsPlanar(const FVector& World,double MarginCm) con
         FMath::Abs(P.X)<=WidthCm*.5-MarginCm+1.e-4 && FMath::Abs(P.Y)<=LengthCm*.5-MarginCm+1.e-4;
 }
 bool FMRFPSArenaLayout::ContainsHead(const FVector& World) const
-{ return ContainsPlanar(World) && World.Z-Center.Z>=30 && World.Z-Center.Z<=260; }
+{
+    if (!IsSane() || World.ContainsNaN()) return false;
+    const FVector Local=ToLocal(World);
+    const double Tolerance=MRFPSArenaLimits::PlayerHeadEdgeToleranceCm;
+    return FMath::Abs(Local.X)<=WidthCm*.5+Tolerance && FMath::Abs(Local.Y)<=LengthCm*.5+Tolerance &&
+        Local.Z>=30 && Local.Z<=260;
+}
 bool FMRFPSArenaLayout::ContainsGeometry(const FVector& World) const
 { return ContainsPlanar(World) && World.Z-Center.Z>=-20 && World.Z-Center.Z<=300; }
 FVector FMRFPSArenaLayout::NominalStart(int32 Slot,double HeadHeightCm) const

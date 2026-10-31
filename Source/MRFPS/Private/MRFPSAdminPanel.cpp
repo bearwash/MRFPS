@@ -60,7 +60,7 @@ void UMRFPSAdminPanel::NativeOnInitialized() {
     auto* ResumeB=Button(WidgetTree,TEXT("再開"));ResumeB->OnClicked.AddDynamic(this,&UMRFPSAdminPanel::Resume);Row(WidgetTree,Body,{StartB,PauseB,ResumeB});
     auto* BuildB=Button(WidgetTree,TEXT("建築モード  B"),true);BuildB->OnClicked.AddDynamic(this,&UMRFPSAdminPanel::PlaceWalls);Add(Body,BuildB);
     auto* OriginB=Button(WidgetTree,TEXT("原点登録"));OriginB->OnClicked.AddDynamic(this,&UMRFPSAdminPanel::ConfirmSharedFloor);
-    OriginB->SetToolTipText(FText::FromString(TEXT("2台を同じ床の原点に合わせ、同じ正面方向を向けてから登録します。")));
+    OriginB->SetToolTipText(FText::FromString(TEXT("2人がそれぞれ開始位置で相手を向き、Yで登録した後に押します。")));
     auto* CalibrateB=Button(WidgetTree,TEXT("床の位置調整"));CalibrateB->OnClicked.AddDynamic(this,&UMRFPSAdminPanel::CalibrateFloor);
     CalibrateB->SetToolTipText(FText::FromString(TEXT("現在の2人の中点と向きへ床を合わせます。大きさは変えません。")));Row(WidgetTree,Body,{OriginB,CalibrateB});
     auto* Dimensions=WidgetTree->ConstructWidget<UHorizontalBox>();const auto* PC=Controller();const auto* GS=PC?PC->GetWorld()->GetGameState<AMRFPSGameState>():nullptr;

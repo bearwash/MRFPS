@@ -66,7 +66,7 @@ FString ErrorText(const FMoBitsQuestStatus& Status)
     const FString& M=Status.Message;
     const TCHAR* Text=TEXT("処理できませんでした。状態を確認して再操作してください。");
     if (Status.Code==7) Text=TEXT("機器とのBluetooth接続に失敗しました。電源・距離と他アプリの接続を確認してください。");
-    else if (Status.Code==188) Text=TEXT("Bluetooth登録の準備に失敗しました。他アプリの接続を終了し、機器を探し直してください。");
+    else if (Status.Code==188) Text=TEXT("Bluetooth登録に失敗しました。Questのペアリング状態を確認し、機器を探し直してください。");
     else if (M.Contains(TEXT("Stopped: make a new explicit request"),ESearchCase::IgnoreCase)) Text=TEXT("停止後です。「開始・権限」を押し、もう一度操作してください。");
     else if (M.Contains(TEXT("Game is not advancing"),ESearchCase::IgnoreCase)) Text=TEXT("Questを装着してゲームに戻り、もう一度操作してください。");
     else if (M.Contains(TEXT("Select a fresh EVT5 pairing advertisement"),ESearchCase::IgnoreCase)) Text=TEXT("機器をペアリングモードにし、「機器を探す」から選び直してください。");
@@ -106,6 +106,7 @@ void UMRFPSMoBitsSetup::Build(UMRFPSLoginMenu* InMenu,UWidgetTree* Tree,UVertica
     auto* StartRow=Row(Tree,DevicesPage);
     Button(Tree,StartRow,TEXT("開始・権限"))->OnClicked.AddDynamic(this,&UMRFPSMoBitsSetup::Start);
     Button(Tree,StartRow,TEXT("機器を探す"))->OnClicked.AddDynamic(this,&UMRFPSMoBitsSetup::Scan);
+    Button(Tree,StartRow,TEXT("検索終了"))->OnClicked.AddDynamic(this,&UMRFPSMoBitsSetup::StopScan);
     DeviceText=Label(Tree,DevicesPage,TEXT("候補なし"));
     auto* DeviceRow=Row(Tree,DevicesPage);
     Button(Tree,DeviceRow,TEXT("前"))->OnClicked.AddDynamic(this,&UMRFPSMoBitsSetup::PreviousDevice);
@@ -199,7 +200,7 @@ void UMRFPSMoBitsSetup::Refresh()
     Show(SessionPage,Session); Show(CalibrationPage,Calibration); Show(PresetsPage,Presets);
     Show(ArmedPage,Armed); Show(StoppedPage,Stopped);
     const FString Error=ErrorText(Status);
-    TextIfChanged(StateText,Error.IsEmpty() ? (Armed?TEXT("準備完了"):Stopped?TEXT("停止中"):TEXT("MoBits セットアップ")) : Error);
+    TextIfChanged(StateText,Error.IsEmpty() ? (Armed?TEXT("準備完了"):Stopped?TEXT("停止中"):Status.bScanning?TEXT("機器を検索中"):TEXT("MoBits セットアップ")) : Error);
     const auto List=Candidates(R);
     if (List.IsEmpty()) Candidate=0; else Candidate=FMath::Clamp(Candidate,0,List.Num()-1);
     // Keep assigned IDs stable across disconnects; never silently swap arms.
@@ -238,7 +239,8 @@ void UMRFPSMoBitsSetup::Refresh()
 }
 
 void UMRFPSMoBitsSetup::Start() { if (auto* R=Runtime()) { ResumeIdentify(); R->Start(); Note(TEXT("許可を求められた場合、許可後にもう一度「開始」を押してください。")); } }
-void UMRFPSMoBitsSetup::Scan() { if (auto* R=Runtime()) { R->ScanDevices(); Note(TEXT("ペアリングモードの機器を探しています。")); } }
+void UMRFPSMoBitsSetup::Scan() { if (auto* R=Runtime()) { if (!R->GetStatus().bScanning) R->ScanDevices(); Note(TEXT("ペアリングモードの機器を探しています。")); } }
+void UMRFPSMoBitsSetup::StopScan() { if (auto* R=Runtime()) { if (R->GetStatus().bScanning) R->StopScan(); Note(TEXT("検索を終了します。")); } }
 void UMRFPSMoBitsSetup::MoveCandidate(int32 Direction) { const auto L=Candidates(Runtime()); if (!L.IsEmpty()) Candidate=(Candidate+Direction+L.Num())%L.Num(); Refresh(); }
 void UMRFPSMoBitsSetup::PreviousDevice() { MoveCandidate(-1); }
 void UMRFPSMoBitsSetup::NextDevice() { MoveCandidate(1); }

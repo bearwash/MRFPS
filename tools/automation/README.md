@@ -1,6 +1,6 @@
 # UE local control
 
-`control.py` submits a JSON operation to a named, running protocol-18 UE client. Windows and Mac use a user-restricted local directory. A debuggable Quest build accepts the same requests in its app-private directory via `adb shell -T run-as`, with the request sent over stdin. The bridge runs on the normal game tick and does not expose a new network port.
+`control.py` submits a JSON operation to a named, running protocol-19 UE client. Windows and Mac use a user-restricted local directory. A debuggable Quest build accepts the same requests in its app-private directory via `adb shell -T run-as`, with the request sent over stdin. The bridge runs on the normal game tick and does not expose a new network port.
 
 Each request requires an immutable UUIDv4. Repeating the same UUID and payload returns or waits for the original result, and the same UUID with different parameters is rejected. If a client restarts after dispatch but before its reply is recorded, the result is `unknown`: it does not silently run the operation again. A server keeps up to 8192 operation receipts for its lifetime; this is not a durable transaction across a server restart or a machine power failure. A repeated UUID returns the original receipt; use a new UUID to apply the desired state again after other changes.
 
@@ -54,6 +54,11 @@ to `false` closes it. The normal `status` response reports
 `quest_mobits_stop_unconfirmed`, and the device list. Setup actions that emit
 stimulation or confirm the wearer's sensation are deliberately not synthesized
 by remote automation.
+
+`status.fighters` also reports each fighter's tracked head coordinates,
+calibration, arena bounds, and the replicated `server_ik_hitboxes_ready` flag.
+The flag describes the server's solved hitbox rig; it does not prove that a
+particular shot hit or that physical headset spaces are aligned.
 
 Explicit disconnect also cancels a pending device exchange or connection. A
 repeat while return travel is scheduled reports `submitted` with
