@@ -2057,7 +2057,7 @@ void AMRFPSPawn::ClientFeedback_Implementation(uint8 Kind, float Damage)
     const auto* PC=Cast<AMRFPSPlayerController>(Controller);
     if (QuestHaptics && (!PC || !PC->DeviceLogin || !PC->DeviceLogin->IsOpen()) &&
         QuestHaptics->GetStatus().Phase==TEXT("armed")) {
-        if (Kind==0) QuestHaptics->PlayPreset(true,EMoBitsHapticWave::GunRecoil);
+        if (Kind==0) QuestHaptics->PlayPreset(true,EMoBitsHapticWave::EnergyBlast);
         else if (Kind==1 || Kind==2) QuestHaptics->PlayPreset(false,EMoBitsHapticWave::Damage);
     }
 #else
